@@ -1,11 +1,12 @@
-#!/usr/bin/env bash
-
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to You under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
+#!/bin/bash
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
@@ -15,181 +16,76 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#
-# If this scripted is run out of /usr/bin or some other system bin directory
-# it should be linked to and not copied. Things like java jar files are found
-# relative to the canonical path of this script.
-#
-
-# See the following page for extensive details on setting
-# up the JVM to accept JMX remote management:
-# http://java.sun.com/javase/6/docs/technotes/guides/management/agent.html
-# by default we allow local JMX connections
-if [ "x$JMXLOCALONLY" = "x" ]
+if [ "x$1" == "x" ]
 then
-    JMXLOCALONLY=false
+    echo "USAGE: $0 startClean|start|stop hostPorts"
+    exit 2
 fi
 
-if [ "x$JMXDISABLE" = "x" ]
+if [ "x$1" == "xstartClean" ]
 then
-    echo "JMX enabled by default" >&2
-    # for some reason these two options are necessary on jdk6 on Ubuntu
-    #   accord to the docs they are not necessary, but otw jconsole cannot
-    #   do a local attach
-    ZOOMAIN="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.local.only=$JMXLOCALONLY org.apache.zookeeper.server.quorum.QuorumPeerMain"
-else
-    echo "JMX disabled by user request" >&2
-    ZOOMAIN="org.apache.zookeeper.server.quorum.QuorumPeerMain"
-fi
-
-# use POSTIX interface, symlink is followed automatically
-ZOOBIN="${BASH_SOURCE-$0}"
-ZOOBIN=`dirname ${ZOOBIN}`
-ZOOBINDIR=`cd ${ZOOBIN}; pwd`
-
-if [ -e "$ZOOBIN/../libexec/zkEnv.sh" ]; then
-  . "$ZOOBINDIR"/../libexec/zkEnv.sh
-else
-  . "$ZOOBINDIR"/zkEnv.sh
-fi
-
-if [ "x$SERVER_JVMFLAGS" != "x" ]
-then
-    JVMFLAGS="$SERVER_JVMFLAGS $JVMFLAGS"
-fi
-
-if [ "x$2" != "x" ]
-then
-    ZOOCFG="$ZOOCFGDIR/$2"
-fi
-
-# if we give a more complicated path to the config, don't screw around in $ZOOCFGDIR
-if [ "x`dirname $ZOOCFG`" != "x$ZOOCFGDIR" ]
-then
-    ZOOCFG="$2"
-fi
-
-if $cygwin
-then
-    ZOOCFG=`cygpath -wp "$ZOOCFG"`
-    # cygwin has a "kill" in the shell itself, gets confused
-    KILL=/bin/kill
-else
-    KILL=kill
-fi
-
-echo "Using config: $ZOOCFG" >&2
-
-ZOO_DATADIR=$(grep "^[[:space:]]*dataDir" "$ZOOCFG" | sed -e 's/.*=//')
-ZOO_DATALOGDIR=$(grep "^[[:space:]]*dataLogDir" "$ZOOCFG" | sed -e 's/.*=//')
-
-# iff autocreate is turned off and the datadirs don't exist fail
-# immediately as we can't create the PID file, etc..., anyway.
-if [ -n "$ZOO_DATADIR_AUTOCREATE_DISABLE" ]; then
-    if [ ! -d "$ZOO_DATADIR/version-2" ]; then
-        echo "ZooKeeper data directory is missing at $ZOO_DATADIR fix the path or run initialize"
-        exit 1
+    if [ "x${base_dir}" == "x" ]
+    then
+    rm -rf /tmp/zkdata
+    else
+    rm -rf ${base_dir}/build/tmp
     fi
-
-    if [ -n "$ZOO_DATALOGDIR" ] && [ ! -d "$ZOO_DATALOGDIR/version-2" ]; then
-        echo "ZooKeeper txnlog directory is missing at $ZOO_DATALOGDIR fix the path or run initialize"
-        exit 1
-    fi
-    ZOO_DATADIR_AUTOCREATE="-Dzookeeper.datadir.autocreate=false"
 fi
 
-if [ -z "$ZOOPIDFILE" ]; then
-    if [ ! -d "$ZOO_DATADIR" ]; then
-        mkdir -p "$ZOO_DATADIR"
-    fi
-    ZOOPIDFILE="$ZOO_DATADIR/zookeeper_server.pid"
+# Make sure nothing is left over from before
+if [ -r "/tmp/zk.pid" ]
+then
+pid=`cat /tmp/zk.pid`
+kill -9 $pid
+rm -f /tmp/zk.pid
+fi
+
+if [ -r "${base_dir}/build/tmp/zk.pid" ]
+then
+pid=`cat ${base_dir}/build/tmp/zk.pid`
+kill -9 $pid
+rm -f ${base_dir}/build/tmp/zk.pid
+fi
+
+if [ "x${base_dir}" == "x" ]	
+then
+zk_base="../../../"
 else
-    # ensure it exists, otw stop will fail
-    mkdir -p $(dirname "$ZOOPIDFILE")
+zk_base="${base_dir}"
 fi
 
-_ZOO_DAEMON_OUT="$ZOO_LOG_DIR/zookeeper.out"
+CLASSPATH="$CLASSPATH:${zk_base}/build/classes"
+CLASSPATH="$CLASSPATH:${zk_base}/conf"
+
+for i in "${zk_base}"/build/lib/*.jar
+do
+    CLASSPATH="$CLASSPATH:$i"
+done
+
+for i in "${zk_base}"/src/java/lib/*.jar
+do
+    CLASSPATH="$CLASSPATH:$i"
+done
 
 case $1 in
-start)
-    echo  -n "Starting zookeeper ... "
-    if [ -f $ZOOPIDFILE ]; then
-      if kill -0 `cat $ZOOPIDFILE` > /dev/null 2>&1; then
-         echo $command already running as process `cat $ZOOPIDFILE`. 
-         exit 0
-      fi
+start|startClean)
+    if [ "x${base_dir}" == "x" ]
+        then
+        mkdir -p /tmp/zkdata
+        java -cp $CLASSPATH org.apache.zookeeper.server.ZooKeeperServerMain 22182 /tmp/zkdata &> /tmp/zk.log &
+        echo $! > /tmp/zk.pid
+        else
+        mkdir -p ${base_dir}/build/tmp/zkdata
+        java -cp $CLASSPATH org.apache.zookeeper.server.ZooKeeperServerMain 22182 ${base_dir}/build/tmp/zkdata &> ${base_dir}/build/tmp/zk.log &
+        echo $! > ${base_dir}/build/tmp/zk.pid
     fi
-    nohup $JAVA $ZOO_DATADIR_AUTOCREATE "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" \
-    "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
-    -cp "$CLASSPATH" $JVMFLAGS $ZOOMAIN "$ZOOCFG" > "$_ZOO_DAEMON_OUT" 2>&1 < /dev/null &
-    if [ $? -eq 0 ]
-    then
-      if /bin/echo -n $! > "$ZOOPIDFILE"
-      then
-        sleep 1
-        echo STARTED
-      else
-        echo FAILED TO WRITE PID
-        exit 1
-      fi
-    else
-      echo SERVER DID NOT START
-      exit 1
-    fi
-    ;;
-start-foreground)
-    ZOO_CMD="exec $JAVA"
-    if [ "${ZOO_NOEXEC}" != "" ]; then
-      ZOO_CMD="$JAVA"
-    fi
-    $ZOO_CMD $ZOO_DATADIR_AUTOCREATE "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" \
-    "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
-    -cp "$CLASSPATH" $JVMFLAGS $ZOOMAIN "$ZOOCFG"
-    ;;
-print-cmd)
-    echo "$JAVA $ZOO_DATADIR_AUTOCREATE -Dzookeeper.log.dir=\"${ZOO_LOG_DIR}\" -Dzookeeper.root.logger=\"${ZOO_LOG4J_PROP}\" -cp \"$CLASSPATH\" $JVMFLAGS $ZOOMAIN \"$ZOOCFG\" > \"$_ZOO_DAEMON_OUT\" 2>&1 < /dev/null"
+        sleep 5
     ;;
 stop)
-    echo -n "Stopping zookeeper ... "
-    if [ ! -f "$ZOOPIDFILE" ]
-    then
-      echo "no zookeeper to stop (could not find file $ZOOPIDFILE)"
-    else
-      $KILL -9 $(cat "$ZOOPIDFILE")
-      rm "$ZOOPIDFILE"
-      echo STOPPED
-    fi
-    exit 0
-    ;;
-upgrade)
-    shift
-    echo "upgrading the servers to 3.*"
-    $JAVA "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
-    -cp "$CLASSPATH" $JVMFLAGS org.apache.zookeeper.server.upgrade.UpgradeMain ${@}
-    echo "Upgrading ... "
-    ;;
-restart)
-    shift
-    "$0" stop ${@}
-    sleep 3
-    "$0" start ${@}
-    ;;
-status)
-    # -q is necessary on some versions of linux where nc returns too quickly, and no stat result is output
-    STAT=`$JAVA "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.root.logger=${ZOO_LOG4J_PROP}" \
-             -cp "$CLASSPATH" $JVMFLAGS org.apache.zookeeper.client.FourLetterWordMain localhost \
-             $(grep "^[[:space:]]*clientPort" "$ZOOCFG" | sed -e 's/.*=//') srvr 2> /dev/null    \
-          | grep Mode`
-    if [ "x$STAT" = "x" ]
-    then
-        echo "Error contacting service. It is probably not running."
-        exit 1
-    else
-        echo $STAT
-        exit 0
-    fi
+    # Already killed above
     ;;
 *)
-    echo "Usage: $0 {start|start-foreground|stop|restart|status|upgrade|print-cmd}" >&2
-
+    echo "Unknown command " + $1
+    exit 2
 esac
+

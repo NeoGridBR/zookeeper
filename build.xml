@@ -37,7 +37,7 @@
       </not>
     </and>
     <then>
-      <exec  executable="mvn" dir="${basedir}" failonerror="true">
+      <exec  executable="D:/tools/apache-maven-3.0.3/bin/mvn.bat" dir="${basedir}" failonerror="true">
         <arg value="-f" />
         <arg value="cloudera-pom.xml" />
         <arg value="process-resources"/>
@@ -50,7 +50,7 @@
 
     <property environment="env"/>
     
-    <property name="version" value="3.4.3" />
+    <property name="version" value="3.4.5-wl" />
     <property name="final.name" value="${name}-${version}"/>
     <property name="revision.dir" value="${basedir}/.revision" />
     <property name="revision.properties" value="revision.properties" />
@@ -246,7 +246,7 @@
     <!-- ====================================================== -->
     <target name="init">    
         <mkdir dir="${build.classes}" />
-
+		<setproxy proxyhost="batalhao" proxyport="3128" proxyuser="cweber" proxypassword="ng10C@s4l0n4"/>
         <mkdir dir="${ivy.lib}"/>
         <mkdir dir="${ivy.package.lib}"/>
         <mkdir dir="${ivy.test.lib}"/>
@@ -659,7 +659,7 @@
     <!--                                                                    -->
     <!-- ================================================================== -->
     <target name="package" 
-            depends="jar,bin-jar,src-jar,javadoc-jar,test-jar,api-report,create-cppunit-configure,compile-test"
+            depends="jar,bin-jar,src-jar,javadoc-jar,test-jar,api-report,compile-test"
             description="Build distribution">
       <mkdir dir="${dist.dir}"/>
       <mkdir dir="${dist.dir}/lib"/>
