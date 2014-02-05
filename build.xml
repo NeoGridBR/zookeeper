@@ -37,7 +37,7 @@
       </not>
     </and>
     <then>
-      <exec  executable="D:/tools/apache-maven-3.0.3/bin/mvn.bat" dir="${basedir}" failonerror="true">
+      <exec  executable="mvn" dir="${basedir}" failonerror="true">
         <arg value="-f" />
         <arg value="cloudera-pom.xml" />
         <arg value="process-resources"/>
