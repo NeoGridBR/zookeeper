@@ -246,7 +246,6 @@
     <!-- ====================================================== -->
     <target name="init">    
         <mkdir dir="${build.classes}" />
-		<setproxy proxyhost="batalhao" proxyport="3128" proxyuser="cweber" proxypassword="ng10C@s4l0n4"/>
         <mkdir dir="${ivy.lib}"/>
         <mkdir dir="${ivy.package.lib}"/>
         <mkdir dir="${ivy.test.lib}"/>
